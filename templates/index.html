@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Normalizador RhinoCRM</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify_content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            color: #333;
+        }
+
+        .container {
+            background-color: white;
+            padding: 2.5rem;
+            border-radius: 12px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 450px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 2rem;
+            font-size: 1.8rem;
+        }
+
+        /* Improved Upload Area */
+        .upload-area {
+            border: 2px dashed #3498db;
+            padding: 3rem 2rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            background-color: #fafbfc;
+        }
+
+        .upload-area:hover {
+            background-color: #eaf6ff;
+            border-color: #2980b9;
+        }
+
+        /* Make file input cover the whole area but invisible */
+        input[type="file"] {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        label {
+            pointer-events: none;
+            /* Let clicks pass through to the input */
+            color: #3498db;
+            font-weight: bold;
+            font-size: 1.1rem;
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+
+        .upload-area p {
+            margin: 0;
+            color: #7f8c8d;
+            pointer-events: none;
+        }
+
+        button {
+            background-color: #2ecc71;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 6px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 2rem;
+            transition: background 0.3s, transform 0.1s;
+            width: 100%;
+            box-shadow: 0 4px 6px rgba(46, 204, 113, 0.2);
+        }
+
+        button:hover {
+            background-color: #27ae60;
+            transform: translateY(-1px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        #file-name {
+            margin-top: 1rem;
+            font-weight: 500;
+            color: #2c3e50;
+            min-height: 24px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+            vertical-align: middle;
+            display: none;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Normalizar Planilha</h1>
+        <form id="upload-form" action="/upload" method="post" enctype="multipart/form-data">
+            <div class="upload-area" id="drop-zone">
+                <input type="file" name="file" id="file" accept=".xlsx" required>
+                <label for="file">Clique para selecionar</label>
+                <p>ou arraste o arquivo aqui</p>
+            </div>
+            <div id="file-name"></div>
+            <button type="submit" id="submit-btn">
+                <span class="spinner" id="spinner"></span>
+                <span id="btn-text">Processar e Baixar</span>
+            </button>
+        </form>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('file');
+        const fileNameDisplay = document.getElementById('file-name');
+        const dropZone = document.getElementById('drop-zone');
+        const form = document.getElementById('upload-form');
+        const submitBtn = document.getElementById('submit-btn');
+        const spinner = document.getElementById('spinner');
+        const btnText = document.getElementById('btn-text');
+
+        // File selection handling
+        fileInput.addEventListener('change', function () {
+            if (this.files && this.files.length > 0) {
+                fileNameDisplay.textContent = this.files[0].name;
+                dropZone.style.borderColor = '#2ecc71';
+                dropZone.style.backgroundColor = '#f0fff4';
+            }
+        });
+
+        // Drag and drop visual feedback
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.style.backgroundColor = '#eaf6ff';
+            dropZone.style.borderColor = '#3498db';
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.style.backgroundColor = '#fafbfc';
+            dropZone.style.borderColor = '#3498db';
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            // The input[type=file] handles the actual drop capture because it covers the div
+            // We just reset styles here if needed, but the change event will trigger
+            dropZone.style.backgroundColor = '#fafbfc';
+        });
+
+        // Form submission handling
+        form.addEventListener('submit', function (e) {
+            // Prevent double submission? 
+            // We can't preventDefault AND submit, but we can disable the button immediately
+
+            if (fileInput.files.length === 0) {
+                e.preventDefault();
+                alert('Por favor, selecione um arquivo primeiro.');
+                return;
+            }
+
+            // Show loading state
+            submitBtn.disabled = true;
+            spinner.style.display = 'inline-block';
+            btnText.textContent = 'Processando...';
+
+            // Re-enable button after a short delay (e.g., 2 seconds) just in case the download starts fast
+            // In a real SPA we would wait for response, but for form submit download, the page doesn't refresh automatically
+            // so we need to reset the state manually or let it be.
+            // Since it's a download, the page state remains. We should re-enable after a timeout so user can upload another if needed.
+            setTimeout(() => {
+                submitBtn.disabled = false;
+                spinner.style.display = 'none';
+                btnText.textContent = 'Processar e Baixar';
+            }, 3000);
+        });
+    </script>
+</body>
+
+</html>
