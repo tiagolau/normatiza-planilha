@@ -31,39 +31,93 @@ def normalize_phone(value):
     
     return digits
 
-def process_dataframe(df):
+def process_dataframe(df, mapping=None):
     """
-    Normalizes the input dataframe to match RhinoCRM_gabarito format.
-    1. Rename columns: ALUNO -> Nome, EMAIL -> Email, CELULAR -> Numero
-    2. Normalize Numero to digits only
-    3. Return only required columns
+    Normalizes the input dataframe.
+    
+    Args:
+        df: Input pandas DataFrame
+        mapping: Optional dictionary with 'Nome' (str) and 'Telefones' (list of str)
+                 If None, uses legacy hardcoded 'ALUNO', 'EMAIL', 'CELULAR'.
     """
-    # Mapping dictionary
-    column_mapping = {
-        'ALUNO': 'Nome',
-        'EMAIL': 'Email',
-        'CELULAR': 'Numero'
-    }
+    # 1. Handle Legacy Mode (Backwards Compatibility)
+    if not mapping:
+        column_mapping = {
+            'ALUNO': 'Nome',
+            'EMAIL': 'Email',
+            'CELULAR': 'Numero'
+        }
+        processed_df = df.rename(columns=column_mapping).copy()
+        
+        # Add missing columns
+        for col in ['Numero', 'Nome', 'Email']:
+            if col not in processed_df.columns:
+                processed_df[col] = ''
+                
+        # Normalize
+        processed_df['Numero'] = processed_df['Numero'].apply(normalize_phone)
+        return processed_df[['Numero', 'Nome', 'Email']]
+
+    # 2. Handle Dynamic Mode
+    # mapping = { 'Nome': 'ColName', 'Telefones': ['Tel1', 'Tel2'] }
     
-    # Check if required columns exist (case insensitive search could be better, but sticking to exact match from analysis)
-    # The user analysis showed exact headers: ALUNO, EMAIL, CELULAR
+    name_col = mapping.get('Nome')
+    phone_cols = mapping.get('Telefones', [])
     
-    # Rename columns
-    # We use a copy to avoid SettingWithCopy warnings if it's a slice
-    processed_df = df.rename(columns=column_mapping).copy()
+    # Rename Name Column
+    processed_df = df.rename(columns={name_col: 'Nome'}).copy()
     
-    # Ensure all target columns exist, create them if missing (though they should exist based on mapping)
-    target_columns = ['Numero', 'Nome', 'Email']
+    # Identify other columns to keep (Like Email) - Optional for now as requirements focused on Name/Phone
+    # If we want to keep Email, we'd need to ask for it in the mapping or guess it.
+    # For now, we'll try to guess 'Email' if it exists in the original headers, otherwise leave blank.
+    email_col = None
+    for col in df.columns:
+        if 'email' in col.lower():
+            email_col = col
+            break
     
-    for col in target_columns:
+    if email_col:
+        processed_df = processed_df.rename(columns={email_col: 'Email'})
+    else:
+        processed_df['Email'] = ''
+
+    # Explode Rows (Melt) if multiple phones or just one phone
+    # We want to transform all phone columns into one 'Numero' column
+    
+    # Columns to keep fixed (Identifier variables)
+    id_vars = ['Nome', 'Email']
+    
+    # Ensure these cols exist (Name is guaranteed by rename above)
+    for col in id_vars:
         if col not in processed_df.columns:
-            # If a separate input format is used, this might fail or we could add empty info
             processed_df[col] = ''
             
-    # Normalize phone numbers
+    # Melt!
+    # If phone_cols is empty (edge case), we just return empty nums? No, validation prevents this.
+    try:
+        # Only melt if we have phone columns to melt
+        if phone_cols:
+             processed_df = processed_df.melt(
+                id_vars=id_vars,
+                value_vars=phone_cols,
+                var_name='Tipo_Original',
+                value_name='Numero'
+            )
+        else:
+             processed_df['Numero'] = ''
+             
+    except KeyError as e:
+        # Fallback if a column is missing
+        print(f"Error during melt: {e}")
+        processed_df['Numero'] = ''
+
+    # Normalize
     processed_df['Numero'] = processed_df['Numero'].apply(normalize_phone)
     
-    # Select and reorder columns
-    processed_df = processed_df[target_columns]
+    # Remove empty numbers (artifacts of melt)
+    processed_df = processed_df[processed_df['Numero'] != '']
     
-    return processed_df
+    # Sort by Name for better readability
+    processed_df = processed_df.sort_values(by='Nome')
+    
+    return processed_df[['Numero', 'Nome', 'Email']]
