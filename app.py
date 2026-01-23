@@ -83,6 +83,7 @@ def process_file():
         )
         
     except Exception as e:
+        print(f"ERROR in /process: {str(e)}") # Log for debugging
         return jsonify({'error': str(e)}), 500
 
 @app.route('/upload', methods=['POST'])

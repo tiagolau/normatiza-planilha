@@ -344,7 +344,10 @@
                     })
                 });
 
-                if (!response.ok) throw new Error('Erro no processamento');
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.error || 'Erro no processamento');
+                }
 
                 const blob = await response.blob();
                 const url = window.URL.createObjectURL(blob);
