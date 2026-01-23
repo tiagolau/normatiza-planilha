@@ -101,8 +101,9 @@ def process_dataframe(df, mapping=None):
                 id_vars=id_vars,
                 value_vars=phone_cols,
                 var_name='Tipo_Original',
-                value_name='Numero'
+                value_name='_Numero_Temp'
             )
+             processed_df = processed_df.rename(columns={'_Numero_Temp': 'Numero'})
         else:
              processed_df['Numero'] = ''
              
